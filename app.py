@@ -615,15 +615,53 @@ def reset_fn():
     )
     return out
 
+SECURE_MED_IMAGE = CURRENT_DIR / "secureMed.png"
+BCIT_LOGO = CURRENT_DIR / "bcitLogo.png"
+
+COMPACT_CSS = """
+footer { display: none !important; }
+.gradio-container { padding-top: 0.5rem !important; }
+.block { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+.prose h2 { margin-top: 0.75rem !important; margin-bottom: 0.25rem !important; }
+.prose h3 { margin-top: 0.5rem !important; margin-bottom: 0.25rem !important; }
+.prose p { margin-top: 0.25rem !important; margin-bottom: 0.25rem !important; }
+#secure-med-row,
+#secure-med-col { justify-content: center !important; align-items: center !important; width: 100% !important; }
+#secure-med-col { display: flex !important; }
+#secure-med-image {
+  width: fit-content !important;
+  max-width: min(720px, 100%) !important;
+  margin-inline: auto !important;
+  flex: 0 0 auto !important;
+}
+#secure-med-image > div,
+#secure-med-image .image-container,
+#secure-med-image .wrap {
+  width: fit-content !important;
+  max-width: 100% !important;
+  margin-inline: auto !important;
+}
+#secure-med-image img {
+  object-fit: contain;
+  max-height: 300px !important;
+  width: auto !important;
+  display: block !important;
+  margin-inline: auto !important;
+}
+#disclaimer-row { align-items: center !important; gap: 0.75rem; margin-top: 0.5rem; }
+#bcit-logo { max-width: 80px; margin: 0 auto; }
+#bcit-logo img { max-height: 60px; width: auto; object-fit: contain; display: block; margin: 0 auto; }
+"""
+
 title_markdown = """
 <div style="text-align: center; max-width: 700px; margin: 0 auto;">
-    <h1 style="font-weight: 900; font-size: 3rem; margin-bottom: 0.5rem; color: #2D3E50;">
+    <h1 style="font-weight: 900; font-size: 2rem; margin-bottom: 0.5rem; color: #2D3E50;">
         🏥 <span style="color: #007BFF;">Secure</span>Med
     </h1>
-    <p style="font-size: 1.2rem; color: #555;">
+    <p style="font-size: 1rem; color: #555;">
         Health Prediction On Encrypted Data Using Fully Homomorphic Encryption
     </p>
-    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 10px;">
+    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 6px;">
         <span style="background-color: #E3F2FD; color: #1976D2; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold;">PRIVACY BY DESIGN</span>
         <span style="background-color: #E8F5E9; color: #388E3C; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold;">ENCRYPTED</span>
     </div>
@@ -639,46 +677,40 @@ if __name__ == "__main__":
 
     (X_train, X_test), (y_train, y_test), valid_symptoms, diseases = load_data()
 
-    with gr.Blocks() as demo:
+    with gr.Blocks(css=COMPACT_CSS) as demo:
 
-        # Link + images
         gr.Markdown(title_markdown)
-        gr.Markdown()
-  
-        gr.Markdown(
-            """
-            <p align="center">
-            <img width="65%" height="25%" src="https://raw.githubusercontent.com/kcelia/Img/main/healthcare_prediction.jpg">
-            </p>
-            """
-        )
-        gr.Markdown("## Notes")
-        gr.Markdown(
-            """
-            - The private key is used to encrypt and decrypt the data and shall never be shared.
-            - The evaluation key is a public key that the server needs to process encrypted data.
-            """
-        )
+
+        with gr.Row(elem_id="secure-med-row"):
+            with gr.Column(elem_id="secure-med-col"):
+                gr.Image(
+                    value=str(SECURE_MED_IMAGE),
+                    show_label=False,
+                    interactive=False,
+                    container=False,
+                    show_download_button=False,
+                    height=300,
+                    elem_id="secure-med-image",
+                )
 
         gr.Markdown("## Model selection")
         gr.Markdown(
-            "Choose the FHE model before entering symptoms. "
-            "Switching models requires regenerating keys in Step 2."
+            "Select a model before symptoms. Changing models requires regenerating keys in Step 2."
         )
         model_type_box = gr.Dropdown(
             choices=[(MODEL_LABELS[k], k) for k in MODEL_REGISTRY],
             label="Model",
             value=None,
         )
+        gr.Markdown(
+            "Private key: client-only. Evaluation key: sent to server for encrypted inference."
+        )
         error_box_model = gr.Textbox(label="Error ❌", visible=False)
         warning_box_model = gr.Textbox(label="Warning ⚠️", visible=False)
 
         # ------------------------- Step 1 -------------------------
-        gr.Markdown("\n")
         gr.Markdown("## Step 1: Select chief complaints")
-        gr.Markdown("<hr />")
-        gr.Markdown("<span style='color:grey'>Client Side</span>")
-        gr.Markdown("Select at least 5 chief complaints from the list below.")
+        gr.Markdown("Client — select at least 5 chief complaints:")
 
         # Step 1.1: Provide symptoms
         check_boxes = []
@@ -730,16 +762,13 @@ if __name__ == "__main__":
         )
 
         # ------------------------- Step 2 -------------------------
-        gr.Markdown("\n")
-        gr.Markdown("## Step 2: Encrypt data")
-        gr.Markdown("<hr />")
-        gr.Markdown("<span style='color:grey'>Client Side</span>")
+        gr.Markdown("## Step 2: Encrypt data (client)")
         # Step 2.1: Key generation
         gr.Markdown(
             "### Key Generation\n\n"
-            "In FHE schemes, a secret (enc/dec)ryption keys are generated for encrypting and decrypting data owned by the client. \n\n"
-            "Additionally, a public evaluation key is generated, enabling external entities to perform homomorphic operations on encrypted data, without the need to decrypt them. \n\n"
-            "The evaluation key will be transmitted to the server for further processing."
+            "Generate client secret keys and a public evaluation key. "
+            "The evaluation key is sent to the server so it can run homomorphic operations "
+            "without decrypting your data."
         )
 
         gen_key_btn = gr.Button(GEN_KEY_BTN_LABEL)
@@ -774,27 +803,16 @@ if __name__ == "__main__":
                 srv_resp_send_data_box = gr.Checkbox(label="Data Sent", show_label=False)
 
         # ------------------------- Step 3 -------------------------
-        gr.Markdown("\n")
-        gr.Markdown("## Step 3: Run the FHE evaluation")
-        gr.Markdown("<hr />")
-        gr.Markdown("<span style='color:grey'>Server Side</span>")
-        gr.Markdown(
-            "Once the server receives the encrypted data, it runs the selected FHE model "
-            "(logistic regression baseline or XGBoost tree ensemble) on encrypted ciphertext only."
-        )
+        gr.Markdown("## Step 3: Run the FHE evaluation (server)")
+        gr.Markdown("Server runs the selected FHE model on encrypted ciphertext only.")
 
         run_fhe_btn = gr.Button("Run the FHE evaluation", interactive=False)
         error_box5 = gr.Textbox(label="Error ❌", visible=False)
         fhe_execution_time_box = gr.Textbox(label="Total FHE Execution Time:", visible=True)
 
         # ------------------------- Step 4 -------------------------
-        gr.Markdown("\n")
-        gr.Markdown("## Step 4: Decrypt the data")
-        gr.Markdown("<hr />")
-        gr.Markdown("<span style='color:grey'>Client Side</span>")
-        gr.Markdown(
-            "### Get the encrypted data from the <span style='color:grey'>Server Side</span>"
-        )
+        gr.Markdown("## Step 4: Decrypt the data (client)")
+        gr.Markdown("### Get the encrypted data from the server")
 
         error_box6 = gr.Textbox(label="Error ❌", visible=False)
 
@@ -889,14 +907,24 @@ if __name__ == "__main__":
 
         # ------------------------- End -------------------------
 
-        gr.Markdown("\n\n")
-
-        gr.Markdown(
-            """**Please Note**: This space is intended solely for educational and demonstration purposes. 
-           It should not be considered as a replacement for professional medical counsel, diagnosis, or therapy for any health or related issues. 
-           Any questions or concerns about your individual health should be addressed to your doctor or another qualified healthcare provider.
-            """
-        )
+        with gr.Row(elem_id="disclaimer-row"):
+            with gr.Column(scale=0, min_width=60, elem_id="bcit-logo-col"):
+                gr.Image(
+                    value=str(BCIT_LOGO),
+                    show_label=False,
+                    interactive=False,
+                    container=False,
+                    show_download_button=False,
+                    height=60,
+                    elem_id="bcit-logo",
+                )
+            with gr.Column(scale=1, elem_id="disclaimer-text-col"):
+                gr.Markdown(
+                    '<p style="font-size: 0.85rem; color: #888; margin: 0;">'
+                    "<strong>Disclaimer:</strong> SecureMed is a BCIT COMP 8047 demonstration project. "
+                    "Outputs are for educational use only and are not medical advice."
+                    "</p>"
+                )
 
         clear_button.click(
             reset_fn,
@@ -931,4 +959,4 @@ if __name__ == "__main__":
             ],
         )
 
-        demo.launch()
+        demo.launch(show_api=False)
