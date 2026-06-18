@@ -2,3 +2,8 @@ concrete-ml==1.4.0
 gradio
 uvicorn>=0.21.0
 fastapi>=0.93.0
+jupyter
+matplotlib
+tqdm
+scikit-learn
+requests

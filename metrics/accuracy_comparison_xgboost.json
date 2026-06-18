@@ -1,0 +1,17 @@
+{
+  "model": "ConcreteXGBClassifier",
+  "model_type": "xgboost",
+  "params": {
+    "n_bits": 6,
+    "max_depth": 3,
+    "n_estimators": 5
+  },
+  "fhe_mode": "execute",
+  "cleartext_accuracy": 0.9761904761904762,
+  "fhe_accuracy": 0.9761904761904762,
+  "accuracy_delta_pp": 0.0,
+  "threshold_pp": 5.0,
+  "pass": true,
+  "n_test_samples": 42,
+  "generated_at": "2026-06-15T06:51:10.080844+00:00"
+}

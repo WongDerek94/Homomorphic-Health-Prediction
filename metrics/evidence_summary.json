@@ -1,0 +1,50 @@
+{
+  "run_config": {
+    "n_runs": 100,
+    "fhe_accuracy_mode": "execute",
+    "seed": 8047,
+    "models": [
+      "logistic_regression",
+      "xgboost"
+    ]
+  },
+  "models": {
+    "logistic_regression": {
+      "model_type": "logistic_regression",
+      "params": {
+        "C": 1.0,
+        "n_bits": 8,
+        "solver": "sag"
+      },
+      "accuracy_delta_pp": 0.0,
+      "accuracy_pass": true,
+      "fhe_latency_median_s": 0.018802050000886084,
+      "fhe_latency_pass": true,
+      "e2e_latency_median_s": 0.034433051000632986,
+      "e2e_latency_pass": true,
+      "keygen_time_s": 0.0011630999997578328,
+      "keygen_pass": true,
+      "ciphertext_median_bytes": 1423624.0,
+      "ciphertext_pass": false
+    },
+    "xgboost": {
+      "model_type": "xgboost",
+      "params": {
+        "n_bits": 6,
+        "max_depth": 3,
+        "n_estimators": 5
+      },
+      "accuracy_delta_pp": 0.0,
+      "accuracy_pass": true,
+      "fhe_latency_median_s": 19.731724752500668,
+      "fhe_latency_pass": false,
+      "e2e_latency_median_s": 22.061223304501254,
+      "e2e_latency_pass": false,
+      "keygen_time_s": 1.504348349000793,
+      "keygen_pass": true,
+      "ciphertext_median_bytes": 1312008.0,
+      "ciphertext_pass": false
+    }
+  },
+  "generated_at": "2026-06-15T08:00:18.737414+00:00"
+}

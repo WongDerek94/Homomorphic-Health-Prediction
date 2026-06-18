@@ -1,0 +1,12 @@
+{
+  "model": "ConcreteLogisticRegression",
+  "model_type": "logistic_regression",
+  "params": {
+    "C": 1.0,
+    "n_bits": 8,
+    "solver": "sag"
+  },
+  "test_accuracy": 1.0,
+  "n_test_samples": 42,
+  "generated_at": "2026-06-15T06:36:10.543231+00:00"
+}

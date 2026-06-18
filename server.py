@@ -1,46 +1,46 @@
 """Server that will listen for GET and POST requests from the client."""
 
+import os
 import time
 from typing import List
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
-from utils import DEPLOYMENT_DIR, SERVER_DIR  # pylint: disable=no-name-in-module
+from utils import MODEL_REGISTRY, SERVER_DIR, get_deployment_dir  # pylint: disable=no-name-in-module
 
 from concrete.ml.deployment import FHEModelServer
 
-# Load the FHE server
-FHE_SERVER = FHEModelServer(DEPLOYMENT_DIR)
+FHE_SERVERS = {}
+for name, path in MODEL_REGISTRY.items():
+    if path.is_dir() and any(path.iterdir()):
+        FHE_SERVERS[name] = FHEModelServer(path)
 
-# Initialize an instance of FastAPI
 app = FastAPI()
 
-# Define the default route
+
+def _get_output_delay_s() -> float:
+    return float(os.environ.get("SECUREMED_GET_OUTPUT_DELAY_S", "1.0"))
+
+
 @app.get("/")
 def root():
-    """
-    Root endpoint of the health prediction API.
-
-    Returns:
-        dict: The welcome message.
-    """
-    return {"message": "Welcome to your disease prediction with FHE!"}
+    return {
+        "message": "Welcome to your disease prediction with FHE!",
+        "loaded_models": list(FHE_SERVERS.keys()),
+    }
 
 
 @app.post("/send_input")
 def send_input(
     user_id: str = Form(),
+    model_type: str = Form(default="logistic_regression"),
     files: List[UploadFile] = File(),
 ):
-    """Send the inputs to the server."""
+    print(f"\nSend the data to the server (model={model_type}) ............\n")
 
-    print("\nSend the data to the server ............\n")
+    evaluation_key_path = SERVER_DIR / f"{user_id}_{model_type}_evaluation_key"
+    encrypted_input_path = SERVER_DIR / f"{user_id}_{model_type}_encrypted_input"
 
-    # Receive the Client's files (Evaluation key + Encrypted symptoms)
-    evaluation_key_path = SERVER_DIR / f"{user_id}_valuation_key"
-    encrypted_input_path = SERVER_DIR / f"{user_id}_encrypted_input"
-
-    # Save the files using the above paths
     with encrypted_input_path.open("wb") as encrypted_input, evaluation_key_path.open(
         "wb"
     ) as evaluation_key:
@@ -51,30 +51,31 @@ def send_input(
 @app.post("/run_fhe")
 def run_fhe(
     user_id: str = Form(),
+    model_type: str = Form(),
 ):
-    """Inference in FHE."""
+    if model_type not in FHE_SERVERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model_type}' not loaded. Available: {list(FHE_SERVERS.keys())}. "
+            f"Run scripts/train_models.py first.",
+        )
 
-    print("\nRun in FHE in the server ............\n")
-    evaluation_key_path = SERVER_DIR / f"{user_id}_valuation_key"
-    encrypted_input_path = SERVER_DIR / f"{user_id}_encrypted_input"
+    print(f"\nRun in FHE in the server (model={model_type}) ............\n")
+    evaluation_key_path = SERVER_DIR / f"{user_id}_{model_type}_evaluation_key"
+    encrypted_input_path = SERVER_DIR / f"{user_id}_{model_type}_encrypted_input"
 
-    # Read the files (Evaluation key + Encrypted symptoms) using the above paths
     with encrypted_input_path.open("rb") as encrypted_output_file, evaluation_key_path.open(
         "rb"
     ) as evaluation_key_file:
-        encrypted_output = encrypted_output_file.read()
+        encrypted_input = encrypted_output_file.read()
         evaluation_key = evaluation_key_file.read()
 
-    # Run the FHE execution
     start = time.time()
-    encrypted_output = FHE_SERVER.run(encrypted_output, evaluation_key)
+    encrypted_output = FHE_SERVERS[model_type].run(encrypted_input, evaluation_key)
     assert isinstance(encrypted_output, bytes)
     fhe_execution_time = round(time.time() - start, 2)
 
-    # Retrieve the encrypted output path
-    encrypted_output_path = SERVER_DIR / f"{user_id}_encrypted_output"
-
-    # Write the file using the above path
+    encrypted_output_path = SERVER_DIR / f"{user_id}_{model_type}_encrypted_output"
     with encrypted_output_path.open("wb") as f:
         f.write(encrypted_output)
 
@@ -82,19 +83,15 @@ def run_fhe(
 
 
 @app.post("/get_output")
-def get_output(user_id: str = Form()):
-    """Retrieve the encrypted output from the server."""
+def get_output(user_id: str = Form(), model_type: str = Form(default="logistic_regression")):
+    print(f"\nGet the output from the server (model={model_type}) ............\n")
 
-    print("\nGet the output from the server ............\n")
-
-    # Path where the encrypted output is saved
-    encrypted_output_path = SERVER_DIR / f"{user_id}_encrypted_output"
-
-    # Read the file using the above path
+    encrypted_output_path = SERVER_DIR / f"{user_id}_{model_type}_encrypted_output"
     with encrypted_output_path.open("rb") as f:
         encrypted_output = f.read()
 
-    time.sleep(1)
+    delay = _get_output_delay_s()
+    if delay > 0:
+        time.sleep(delay)
 
-    # Send the encrypted output
     return Response(encrypted_output)

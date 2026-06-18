@@ -10,13 +10,16 @@ from symptoms_categories import SYMPTOMS_LIST
 from utils import (
     CLIENT_DIR,
     CURRENT_DIR,
-    DEPLOYMENT_DIR,
     INPUT_BROWSER_LIMIT,
     KEYS_DIR,
+    MODEL_LABELS,
+    MODEL_REGISTRY,
+    SERVER_DIR,
     SERVER_URL,
     TARGET_COLUMNS,
     TRAINING_FILENAME,
     clean_directory,
+    get_deployment_dir,
     get_disease_name,
     load_data,
     pretty_print,
@@ -27,7 +30,42 @@ from concrete.ml.deployment import FHEModelClient
 subprocess.Popen(["uvicorn", "server:app"], cwd=CURRENT_DIR)
 time.sleep(3)
 
+GEN_KEY_BTN_LABEL = "Generate the private and evaluation keys."
+KEYS_GENERATED_LABEL = "Keys have been generated ✅"
+
 # pylint: disable=c-extension-no-member,invalid-name
+
+
+def _disable_run_fhe_btn():
+    return gr.update(interactive=False)
+
+
+def _enable_run_fhe_btn():
+    return gr.update(interactive=True)
+
+
+def _crypto_state_reset():
+    """Clear crypto/server workflow state (UI components must exist at call time)."""
+    return {
+        gen_key_btn: gr.update(value=GEN_KEY_BTN_LABEL),
+        run_fhe_btn: _disable_run_fhe_btn(),
+        user_id_box: gr.update(visible=False, value=None),
+        key_box: gr.update(visible=True, value=None),
+        key_len_box: gr.update(visible=False, value=None),
+        enc_vect_box: gr.update(visible=True, value=None),
+        one_hot_vect_box: gr.update(value=None),
+        srv_resp_send_data_box: gr.update(value=False),
+        srv_resp_retrieve_data_box: gr.update(value=False),
+        fhe_execution_time_box: gr.update(visible=True, value=None),
+        decrypt_box: gr.update(value=None),
+        error_box2: gr.update(visible=False),
+        error_box3: gr.update(visible=False),
+        error_box4: gr.update(visible=False),
+        error_box5: gr.update(visible=False),
+        error_box6: gr.update(visible=False),
+        error_box7: gr.update(visible=False),
+        warning_box_model: gr.update(visible=False),
+    }
 
 
 def is_none(obj) -> bool:
@@ -41,6 +79,22 @@ def is_none(obj) -> bool:
         bool: True if the object is None or empty, False otherwise.
     """
     return obj is None or (obj is not None and len(obj) < 1)
+
+
+def _valid_model(model_type: str) -> bool:
+    return model_type in MODEL_REGISTRY and model_type
+
+
+def _model_error(model_type: str) -> dict | None:
+    if _valid_model(model_type):
+        return None
+    return {
+        "error_box_model": gr.update(
+            visible=True,
+            value="⚠️ Select a model before continuing.",
+        ),
+        "warning_box_model": gr.update(visible=False),
+    }
 
 
 def display_default_symptoms_fn(default_disease: str) -> Dict:
@@ -96,30 +150,40 @@ def get_user_symptoms_from_checkboxgroup(checkbox_symptoms: List) -> np.array:
     return user_symptoms_vect
 
 
-def get_features_fn(*checked_symptoms: Tuple[str]) -> Dict:
+def get_features_fn(model_type: str, *checked_symptoms: Tuple[str]) -> Dict:
     """
     Get vector features based on the selected symptoms.
 
     Args:
+        model_type (str): Selected FHE model
         checked_symptoms (Tuple[str]): User symptoms
 
     Returns:
         Dict: The encoded user vector symptoms.
     """
+    if err := _model_error(model_type):
+        return {**err, "one_hot_vect": None, "submit_btn": gr.update(value="Submit")}
+
     if not any(lst for lst in checked_symptoms if lst):
         return {
             error_box1: gr.update(visible=True, value="⚠️ Please provide your chief complaints."),
+            error_box_model: gr.update(visible=False),
+            warning_box_model: gr.update(visible=False),
         }
 
     if len(pretty_print(checked_symptoms)) < 5:
         print("Provide at least 5 symptoms.")
         return {
             error_box1: gr.update(visible=True, value="⚠️ Provide at least 5 symptoms"),
+            error_box_model: gr.update(visible=False),
+            warning_box_model: gr.update(visible=False),
             one_hot_vect: None,
         }
 
     return {
         error_box1: gr.update(visible=False),
+        error_box_model: gr.update(visible=False),
+        warning_box_model: gr.update(visible=False),
         one_hot_vect: gr.update(
             visible=False,
             value=get_user_symptoms_from_checkboxgroup(pretty_print(checked_symptoms)),
@@ -128,30 +192,37 @@ def get_features_fn(*checked_symptoms: Tuple[str]) -> Dict:
     }
 
 
-def key_gen_fn(user_symptoms: List[str]) -> Dict:
+def key_gen_fn(user_symptoms: List[str], model_type: str) -> Dict:
     """
     Generate keys for a given user.
 
     Args:
         user_symptoms (List[str]): The vector symptoms provided by the user.
+        model_type (str): Selected FHE model
 
     Returns:
         dict: A dictionary containing the generated keys and related information.
 
     """
+    if err := _model_error(model_type):
+        return {**err, run_fhe_btn: _disable_run_fhe_btn()}
+
     clean_directory()
 
     if is_none(user_symptoms):
         print("Error: Please submit your symptoms or select a default disease.")
         return {
             error_box2: gr.update(visible=True, value="⚠️ Please submit your symptoms first."),
+            run_fhe_btn: _disable_run_fhe_btn(),
         }
 
     # Generate a random user ID
     user_id = np.random.randint(0, 2**32)
     print(f"Your user ID is: {user_id}....")
 
-    client = FHEModelClient(path_dir=DEPLOYMENT_DIR, key_dir=KEYS_DIR / f"{user_id}")
+    client = FHEModelClient(
+        path_dir=get_deployment_dir(model_type), key_dir=KEYS_DIR / f"{user_id}/{model_type}"
+    )
     client.load()
 
     # Creates the private and evaluation keys on the client side
@@ -162,7 +233,9 @@ def key_gen_fn(user_symptoms: List[str]) -> Dict:
     assert isinstance(serialized_evaluation_keys, bytes)
 
     # Save the evaluation key
-    evaluation_key_path = KEYS_DIR / f"{user_id}/evaluation_key"
+    key_dir = KEYS_DIR / f"{user_id}/{model_type}"
+    key_dir.mkdir(parents=True, exist_ok=True)
+    evaluation_key_path = key_dir / "evaluation_key"
     with evaluation_key_path.open("wb") as f:
         f.write(serialized_evaluation_keys)
 
@@ -175,18 +248,24 @@ def key_gen_fn(user_symptoms: List[str]) -> Dict:
         key_len_box: gr.update(
             visible=False, value=f"{len(serialized_evaluation_keys) / (10**6):.2f} MB"
         ),
-        gen_key_btn: gr.update(value="Keys have been generated ✅")
+        gen_key_btn: gr.update(value=KEYS_GENERATED_LABEL),
+        run_fhe_btn: _disable_run_fhe_btn(),
+        warning_box_model: gr.update(visible=False),
     }
 
 
-def encrypt_fn(user_symptoms: np.ndarray, user_id: str) -> None:
+def encrypt_fn(user_symptoms: np.ndarray, user_id: str, model_type: str) -> None:
     """
     Encrypt the user symptoms vector in the `Client Side`.
 
     Args:
         user_symptoms (List[str]): The vector symptoms provided by the user
         user_id (user): The current user's ID
+        model_type (str): Selected FHE model
     """
+
+    if err := _model_error(model_type):
+        return {**err, run_fhe_btn: _disable_run_fhe_btn()}
 
     if is_none(user_id) or is_none(user_symptoms):
         print("Error in encryption step: Provide your symptoms and generate the evaluation keys.")
@@ -195,19 +274,22 @@ def encrypt_fn(user_symptoms: np.ndarray, user_id: str) -> None:
                 visible=True,
                 value="⚠️ Please ensure that your symptoms have been submitted and "
                 "that you have generated the evaluation key.",
-            )
+            ),
+            run_fhe_btn: _disable_run_fhe_btn(),
         }
 
     # Retrieve the client API
-    client = FHEModelClient(path_dir=DEPLOYMENT_DIR, key_dir=KEYS_DIR / f"{user_id}")
+    client = FHEModelClient(
+        path_dir=get_deployment_dir(model_type), key_dir=KEYS_DIR / f"{user_id}/{model_type}"
+    )
     client.load()
 
     user_symptoms = np.fromstring(user_symptoms[2:-2], dtype=int, sep=".").reshape(1, -1)
-    # quant_user_symptoms = client.model.quantize_input(user_symptoms)
 
     encrypted_quantized_user_symptoms = client.quantize_encrypt_serialize(user_symptoms)
     assert isinstance(encrypted_quantized_user_symptoms, bytes)
-    encrypted_input_path = KEYS_DIR / f"{user_id}/encrypted_input"
+    key_dir = KEYS_DIR / f"{user_id}/{model_type}"
+    encrypted_input_path = key_dir / "encrypted_input"
 
     with encrypted_input_path.open("wb") as f:
         f.write(encrypted_quantized_user_symptoms)
@@ -220,16 +302,21 @@ def encrypt_fn(user_symptoms: np.ndarray, user_id: str) -> None:
         error_box3: gr.update(visible=False),
         one_hot_vect_box: gr.update(visible=True, value=user_symptoms),
         enc_vect_box: gr.update(visible=True, value=encrypted_quantized_user_symptoms_shorten_hex),
+        run_fhe_btn: _disable_run_fhe_btn(),
     }
 
 
-def send_input_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
+def send_input_fn(user_id: str, user_symptoms: np.ndarray, model_type: str) -> Dict:
     """Send the encrypted data and the evaluation key to the server.
 
     Args:
         user_id (str): The current user's ID
         user_symptoms (np.ndarray): The user symptoms
+        model_type (str): Selected FHE model
     """
+
+    if err := _model_error(model_type):
+        return {**err, run_fhe_btn: _disable_run_fhe_btn()}
 
     if is_none(user_id) or is_none(user_symptoms):
         return {
@@ -238,11 +325,13 @@ def send_input_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
                 value="⚠️ Please check your connectivity \n"
                 "⚠️ Ensure that the symptoms have been submitted and the evaluation "
                 "key has been generated before sending the data to the server.",
-            )
+            ),
+            run_fhe_btn: _disable_run_fhe_btn(),
         }
 
-    evaluation_key_path = KEYS_DIR / f"{user_id}/evaluation_key"
-    encrypted_input_path = KEYS_DIR / f"{user_id}/encrypted_input"
+    key_dir = KEYS_DIR / f"{user_id}/{model_type}"
+    evaluation_key_path = key_dir / "evaluation_key"
+    encrypted_input_path = key_dir / "encrypted_input"
 
     if not evaluation_key_path.is_file():
         print(
@@ -251,7 +340,8 @@ def send_input_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
         )
 
         return {
-            error_box4: gr.update(visible=True, value="⚠️ Please generate the private key first.")
+            error_box4: gr.update(visible=True, value="⚠️ Please generate the private key first."),
+            run_fhe_btn: _disable_run_fhe_btn(),
         }
 
     if not encrypted_input_path.is_file():
@@ -264,11 +354,13 @@ def send_input_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
                 visible=True,
                 value="⚠️ Please encrypt the data with the private key first.",
             ),
+            run_fhe_btn: _disable_run_fhe_btn(),
         }
 
     # Define the data and files to post
     data = {
         "user_id": user_id,
+        "model_type": model_type,
         "input": user_symptoms,
     }
 
@@ -285,18 +377,31 @@ def send_input_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
         files=files,
     ) as response:
         print(f"Sending Data: {response.ok=}")
+        if not response.ok:
+            return {
+                error_box4: gr.update(
+                    visible=True,
+                    value="⚠️ Server rejected the upload. Check connectivity and retry from Step 2.",
+                ),
+                run_fhe_btn: _disable_run_fhe_btn(),
+            }
     return {
         error_box4: gr.update(visible=False),
-        srv_resp_send_data_box: "Data sent",
+        srv_resp_send_data_box: gr.update(value=True),
+        run_fhe_btn: _enable_run_fhe_btn(),
     }
 
 
-def run_fhe_fn(user_id: str) -> Dict:
+def run_fhe_fn(user_id: str, model_type: str) -> Dict:
     """Send the encrypted input and the evaluation key to the server.
 
     Args:
         user_id (int): The current user's ID.
+        model_type (str): Selected FHE model
     """
+    if err := _model_error(model_type):
+        return {**err, "fhe_execution_time_box": None}
+
     if is_none(user_id):
         return {
             error_box5: gr.update(
@@ -311,6 +416,7 @@ def run_fhe_fn(user_id: str) -> Dict:
 
     data = {
         "user_id": user_id,
+        "model_type": model_type,
     }
 
     url = SERVER_URL + "run_fhe"
@@ -340,13 +446,17 @@ def run_fhe_fn(user_id: str) -> Dict:
     }
 
 
-def get_output_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
+def get_output_fn(user_id: str, user_symptoms: np.ndarray, model_type: str) -> Dict:
     """Retreive the encrypted data from the server.
 
     Args:
         user_id (str): The current user's ID
         user_symptoms (np.ndarray): The user symptoms
+        model_type (str): Selected FHE model
     """
+
+    if err := _model_error(model_type):
+        return err
 
     if is_none(user_id) or is_none(user_symptoms):
         return {
@@ -359,6 +469,7 @@ def get_output_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
 
     data = {
         "user_id": user_id,
+        "model_type": model_type,
     }
 
     # Retrieve the encrypted output
@@ -372,9 +483,7 @@ def get_output_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
 
             encrypted_output = response.content
 
-            # Save the encrypted output to bytes in a file as it is too large to pass through
-            # regular Gradio buttons (see https://github.com/gradio-app/gradio/issues/1877)
-            encrypted_output_path = CLIENT_DIR / f"{user_id}_encrypted_output"
+            encrypted_output_path = CLIENT_DIR / f"{user_id}_{model_type}_encrypted_output"
 
             with encrypted_output_path.open("wb") as f:
                 f.write(encrypted_output)
@@ -382,18 +491,22 @@ def get_output_fn(user_id: str, user_symptoms: np.ndarray) -> Dict:
 
 
 def decrypt_fn(
-    user_id: str, user_symptoms: np.ndarray, *checked_symptoms, threshold: int = 0.5
+    user_id: str, user_symptoms: np.ndarray, model_type: str, *checked_symptoms, threshold: int = 0.5
 ) -> Dict:
     """Dencrypt the data on the `Client Side`.
 
     Args:
         user_id (str): The current user's ID
         user_symptoms (np.ndarray): The user symptoms
+        model_type (str): Selected FHE model
         threshold (float): Probability confidence threshold
 
     Returns:
         Decrypted output
     """
+
+    if err := _model_error(model_type):
+        return {**err, "decrypt_box": None}
 
     if is_none(user_id) or is_none(user_symptoms):
         return {
@@ -405,7 +518,7 @@ def decrypt_fn(
         }
 
     # Get the encrypted output path
-    encrypted_output_path = CLIENT_DIR / f"{user_id}_encrypted_output"
+    encrypted_output_path = CLIENT_DIR / f"{user_id}_{model_type}_encrypted_output"
 
     if not encrypted_output_path.is_file():
         print("Error in decryption step: Please run the FHE execution, first.")
@@ -427,7 +540,9 @@ def decrypt_fn(
         encrypted_output = f.read()
 
     # Retrieve the client API
-    client = FHEModelClient(path_dir=DEPLOYMENT_DIR, key_dir=KEYS_DIR / f"{user_id}")
+    client = FHEModelClient(
+        path_dir=get_deployment_dir(model_type), key_dir=KEYS_DIR / f"{user_id}/{model_type}"
+    )
     client.load()
 
     # Deserialize, decrypt and post-process the encrypted output
@@ -460,35 +575,45 @@ def decrypt_fn(
     }
 
 
+def on_model_change_fn(model_type: str) -> Dict:
+    """Reset crypto workflow when the user switches models."""
+    out = _crypto_state_reset()
+    if model_type:
+        out[warning_box_model] = gr.update(
+            visible=True,
+            value=(
+                "Model changed — regenerate keys (Step 2), re-encrypt, "
+                "and re-send data before running FHE."
+            ),
+        )
+        out[error_box_model] = gr.update(visible=False)
+    else:
+        out[warning_box_model] = gr.update(visible=False)
+        out[error_box_model] = gr.update(visible=False)
+    return out
+
+
 def reset_fn():
     """Reset the space and clear all the box outputs."""
 
     clean_directory()
 
-    return {
-        one_hot_vect: None,
-        one_hot_vect_box: None,
-        enc_vect_box: gr.update(visible=True, value=None),
-        quant_vect_box: gr.update(visible=False, value=None),
-        user_id_box: gr.update(visible=False, value=None),
-        default_symptoms: gr.update(visible=True, value=None),
-        default_disease_box: gr.update(visible=True, value=None),
-        key_box: gr.update(visible=True, value=None),
-        key_len_box: gr.update(visible=False, value=None),
-        fhe_execution_time_box: gr.update(visible=True, value=None),
-        decrypt_box: None,
-        submit_btn: gr.update(value="Submit"),
-        error_box7: gr.update(visible=False),
-        error_box1: gr.update(visible=False),
-        error_box2: gr.update(visible=False),
-        error_box3: gr.update(visible=False),
-        error_box4: gr.update(visible=False),
-        error_box5: gr.update(visible=False),
-        error_box6: gr.update(visible=False),
-        srv_resp_send_data_box: None,
-        srv_resp_retrieve_data_box: None,
-        **{box: None for box in check_boxes},
-    }
+    out = _crypto_state_reset()
+    out.update(
+        {
+            one_hot_vect: None,
+            quant_vect_box: gr.update(visible=False, value=None),
+            default_symptoms: gr.update(visible=True, value=None),
+            default_disease_box: gr.update(visible=True, value=None),
+            submit_btn: gr.update(value="Submit"),
+            error_box1: gr.update(visible=False),
+            error_box_model: gr.update(visible=False),
+            warning_box_model: gr.update(visible=False),
+            model_type_box: gr.update(value=None),
+            **{box: None for box in check_boxes},
+        }
+    )
+    return out
 
 title_markdown = """
 <div style="text-align: center; max-width: 700px; margin: 0 auto;">
@@ -499,7 +624,7 @@ title_markdown = """
         Health Prediction On Encrypted Data Using Fully Homomorphic Encryption
     </p>
     <div style="display: flex; justify-content: center; gap: 10px; margin-top: 10px;">
-        <span style="background-color: #E3F2FD; color: #1976D2; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold;">HIPAA COMPLIANT</span>
+        <span style="background-color: #E3F2FD; color: #1976D2; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold;">PRIVACY BY DESIGN</span>
         <span style="background-color: #E8F5E9; color: #388E3C; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold;">ENCRYPTED</span>
     </div>
 </div>
@@ -534,6 +659,19 @@ if __name__ == "__main__":
             - The evaluation key is a public key that the server needs to process encrypted data.
             """
         )
+
+        gr.Markdown("## Model selection")
+        gr.Markdown(
+            "Choose the FHE model before entering symptoms. "
+            "Switching models requires regenerating keys in Step 2."
+        )
+        model_type_box = gr.Dropdown(
+            choices=[(MODEL_LABELS[k], k) for k in MODEL_REGISTRY],
+            label="Model",
+            value=None,
+        )
+        error_box_model = gr.Textbox(label="Error ❌", visible=False)
+        warning_box_model = gr.Textbox(label="Warning ⚠️", visible=False)
 
         # ------------------------- Step 1 -------------------------
         gr.Markdown("\n")
@@ -587,8 +725,8 @@ if __name__ == "__main__":
 
         submit_btn.click(
             fn=get_features_fn,
-            inputs=[*check_boxes],
-            outputs=[one_hot_vect, error_box1, submit_btn],
+            inputs=[model_type_box, *check_boxes],
+            outputs=[one_hot_vect, error_box1, submit_btn, error_box_model, warning_box_model],
         )
 
         # ------------------------- Step 2 -------------------------
@@ -604,23 +742,11 @@ if __name__ == "__main__":
             "The evaluation key will be transmitted to the server for further processing."
         )
 
-        gen_key_btn = gr.Button("Generate the private and evaluation keys.")
+        gen_key_btn = gr.Button(GEN_KEY_BTN_LABEL)
         error_box2 = gr.Textbox(label="Error ❌", visible=False)
         user_id_box = gr.Textbox(label="User ID:", visible=False)
         key_len_box = gr.Textbox(label="Evaluation Key Size:", visible=False)
         key_box = gr.Textbox(label="Evaluation key (truncated):", max_lines=3, visible=False)
-
-        gen_key_btn.click(
-            key_gen_fn,
-            inputs=one_hot_vect,
-            outputs=[
-                key_box,
-                user_id_box,
-                key_len_box,
-                error_box2,
-                gen_key_btn,
-            ],
-        )
 
         # Step 2.2: Encrypt data locally
         gr.Markdown("### Encrypt the data")
@@ -634,15 +760,6 @@ if __name__ == "__main__":
             with gr.Column():
                 enc_vect_box = gr.Textbox(label="Encrypted Vector:", max_lines=10)
 
-        encrypt_btn.click(
-            encrypt_fn,
-            inputs=[one_hot_vect, user_id_box],
-            outputs=[
-                one_hot_vect_box,
-                enc_vect_box,
-                error_box3,
-            ],
-        )
         # Step 2.3: Send encrypted data to the server
         gr.Markdown(
             "### Send the encrypted data to the <span style='color:grey'>Server Side</span>"
@@ -656,30 +773,19 @@ if __name__ == "__main__":
             with gr.Column(scale=1):
                 srv_resp_send_data_box = gr.Checkbox(label="Data Sent", show_label=False)
 
-        send_input_btn.click(
-            send_input_fn,
-            inputs=[user_id_box, one_hot_vect],
-            outputs=[error_box4, srv_resp_send_data_box],
-        )
-
         # ------------------------- Step 3 -------------------------
         gr.Markdown("\n")
         gr.Markdown("## Step 3: Run the FHE evaluation")
         gr.Markdown("<hr />")
         gr.Markdown("<span style='color:grey'>Server Side</span>")
         gr.Markdown(
-            "Once the server receives the encrypted data, it can process and compute the output without ever decrypting the data just as it would on clear data.\n\n"
-            "This server employs a Logistic Regression model that has been trained on this [data-set](https://github.com/anujdutt9/Disease-Prediction-from-Symptoms/tree/master/dataset)."
+            "Once the server receives the encrypted data, it runs the selected FHE model "
+            "(logistic regression baseline or XGBoost tree ensemble) on encrypted ciphertext only."
         )
 
-        run_fhe_btn = gr.Button("Run the FHE evaluation")
+        run_fhe_btn = gr.Button("Run the FHE evaluation", interactive=False)
         error_box5 = gr.Textbox(label="Error ❌", visible=False)
         fhe_execution_time_box = gr.Textbox(label="Total FHE Execution Time:", visible=True)
-        run_fhe_btn.click(
-            run_fhe_fn,
-            inputs=[user_id_box],
-            outputs=[fhe_execution_time_box, error_box5],
-        )
 
         # ------------------------- Step 4 -------------------------
         gr.Markdown("\n")
@@ -702,7 +808,7 @@ if __name__ == "__main__":
 
         get_output_btn.click(
             get_output_fn,
-            inputs=[user_id_box, one_hot_vect],
+            inputs=[user_id_box, one_hot_vect, model_type_box],
             outputs=[srv_resp_retrieve_data_box, error_box6],
         )
 
@@ -714,8 +820,71 @@ if __name__ == "__main__":
 
         decrypt_btn.click(
             decrypt_fn,
-            inputs=[user_id_box, one_hot_vect, *check_boxes],
+            inputs=[user_id_box, one_hot_vect, model_type_box, *check_boxes],
             outputs=[decrypt_box, error_box7, submit_btn],
+        )
+
+        gen_key_btn.click(
+            key_gen_fn,
+            inputs=[one_hot_vect, model_type_box],
+            outputs=[
+                key_box,
+                user_id_box,
+                key_len_box,
+                error_box2,
+                gen_key_btn,
+                run_fhe_btn,
+                warning_box_model,
+            ],
+        )
+
+        encrypt_btn.click(
+            encrypt_fn,
+            inputs=[one_hot_vect, user_id_box, model_type_box],
+            outputs=[
+                one_hot_vect_box,
+                enc_vect_box,
+                error_box3,
+                run_fhe_btn,
+            ],
+        )
+
+        send_input_btn.click(
+            send_input_fn,
+            inputs=[user_id_box, one_hot_vect, model_type_box],
+            outputs=[error_box4, srv_resp_send_data_box, run_fhe_btn],
+        )
+
+        run_fhe_btn.click(
+            run_fhe_fn,
+            inputs=[user_id_box, model_type_box],
+            outputs=[fhe_execution_time_box, error_box5],
+        )
+
+        model_type_box.change(
+            on_model_change_fn,
+            inputs=[model_type_box],
+            outputs=[
+                gen_key_btn,
+                run_fhe_btn,
+                user_id_box,
+                key_box,
+                key_len_box,
+                enc_vect_box,
+                one_hot_vect_box,
+                srv_resp_send_data_box,
+                srv_resp_retrieve_data_box,
+                fhe_execution_time_box,
+                decrypt_box,
+                error_box2,
+                error_box3,
+                error_box4,
+                error_box5,
+                error_box6,
+                error_box7,
+                error_box_model,
+                warning_box_model,
+            ],
         )
 
         # ------------------------- End -------------------------
@@ -732,27 +901,32 @@ if __name__ == "__main__":
         clear_button.click(
             reset_fn,
             outputs=[
-                one_hot_vect_box,
                 one_hot_vect,
+                quant_vect_box,
                 submit_btn,
                 error_box1,
+                error_box_model,
+                warning_box_model,
+                model_type_box,
+                default_disease_box,
+                default_symptoms,
+                gen_key_btn,
+                run_fhe_btn,
+                user_id_box,
+                key_len_box,
+                key_box,
+                enc_vect_box,
+                one_hot_vect_box,
+                srv_resp_send_data_box,
+                srv_resp_retrieve_data_box,
+                fhe_execution_time_box,
+                decrypt_box,
                 error_box2,
                 error_box3,
                 error_box4,
                 error_box5,
                 error_box6,
                 error_box7,
-                default_disease_box,
-                default_symptoms,
-                user_id_box,
-                key_len_box,
-                key_box,
-                quant_vect_box,
-                enc_vect_box,
-                srv_resp_send_data_box,
-                srv_resp_retrieve_data_box,
-                fhe_execution_time_box,
-                decrypt_box,
                 *check_boxes,
             ],
         )

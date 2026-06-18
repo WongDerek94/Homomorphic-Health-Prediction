@@ -1,0 +1,17 @@
+{
+  "model": "ConcreteLogisticRegression",
+  "model_type": "logistic_regression",
+  "params": {
+    "C": 1.0,
+    "n_bits": 8,
+    "solver": "sag"
+  },
+  "fhe_mode": "execute",
+  "cleartext_accuracy": 1.0,
+  "fhe_accuracy": 1.0,
+  "accuracy_delta_pp": 0.0,
+  "threshold_pp": 5.0,
+  "pass": true,
+  "n_test_samples": 42,
+  "generated_at": "2026-06-15T06:36:11.334716+00:00"
+}

@@ -1,0 +1,12 @@
+{
+  "model": "ConcreteXGBClassifier",
+  "model_type": "xgboost",
+  "params": {
+    "n_bits": 6,
+    "max_depth": 3,
+    "n_estimators": 5
+  },
+  "test_accuracy": 0.9761904761904762,
+  "n_test_samples": 42,
+  "generated_at": "2026-06-15T06:36:34.596677+00:00"
+}

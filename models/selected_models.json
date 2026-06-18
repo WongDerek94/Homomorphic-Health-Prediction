@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-06-15T06:35:12Z",
+  "models": {
+    "logistic_regression": {
+      "model_type": "logistic_regression",
+      "classifier": "ConcreteLogisticRegression",
+      "params": {
+        "C": 1.0,
+        "n_bits": 8,
+        "solver": "sag"
+      },
+      "rationale": "No config passed all thresholds; selected best compromise on accuracy delta, ciphertext size, and FHE execute time.",
+      "cv_best_params": {
+        "C": 0.5,
+        "n_bits": 7,
+        "solver": "sag"
+      },
+      "cv_best_score": 1.0
+    },
+    "xgboost": {
+      "model_type": "xgboost",
+      "classifier": "ConcreteXGBClassifier",
+      "params": {
+        "n_bits": 6,
+        "max_depth": 3,
+        "n_estimators": 5
+      },
+      "rationale": "No config passed all thresholds; selected best compromise on accuracy delta, ciphertext size, and FHE execute time.",
+      "cv_best_params": {
+        "max_depth": 1,
+        "n_bits": 6,
+        "n_estimators": 20
+      },
+      "cv_best_score": 1.0
+    }
+  }
+}

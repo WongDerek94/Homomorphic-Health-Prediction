@@ -18,44 +18,53 @@ tags:
 python_version: 3.10.6
 ---
 
-# Healthcare prediction using FHE
+# SecureMed — Healthcare prediction using FHE
 
-## Running the application on your machine
+Privacy-preserving symptom-to-diagnosis prediction with Concrete-ML. Supports **logistic regression** (baseline) and **XGBoost** (tree ensemble) via a mandatory model picker in the Gradio UI.
 
-From this directory, i.e., `health_prediction`, you can proceed with the following steps.
-
-### Do once
-
-First, create a virtual env and activate it:
-
-<!--pytest-codeblocks:skip-->
+## Setup (once)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-Then, install required packages:
-
-<!--pytest-codeblocks:skip-->
+## Phase 2 workflow
 
 ```bash
-pip3 install pip --upgrade
-pip3 install -U pip wheel setuptools --ignore-installed
-pip3 install -r requirements.txt --ignore-installed
+# 1. Preprocess data (optional — committed CSVs exist)
+python scripts/preprocess_data.py
+
+# 2. Model selection (long-running; artifacts in models/ are committed)
+python scripts/run_model_selection.py
+# Or: jupyter notebook scripts/model_selection.ipynb
+
+# 3. Train and deploy FHE bundles
+python scripts/train_models.py --model both
+
+# 4. Generate evaluation evidence (N=100, both models)
+python scripts/generate_evidence.py --model both
+python scripts/generate_evidence.py --quick   # smoke test
 ```
 
-## Run the following steps each time you relaunch the application
-
-In a terminal, run:
-
-<!--pytest-codeblocks:skip-->
+## Run the application
 
 ```bash
-source .venv/bin/activate
-python3 app.py
+source venv/bin/activate
+python app.py
 ```
 
-## Interacting with the application
+Open the Gradio URL (e.g. `http://127.0.0.1:8888`). Select a model before entering symptoms. The app spawns the FastAPI server on port 8000.
 
-Open the given URL link (search for a line like `Running on local URL:  http://127.0.0.1:8888/`).
+## Evidence and metrics
+
+Results are written to `metrics/` and `artifacts/`, with pass/fail verdicts in `metrics/evidence_summary.json`.
+
+| Model | FHE latency (median) | Ciphertext | Accuracy |
+|-------|---------------------|------------|----------|
+| Logistic regression (`n_bits=8`) | ~19 ms | ~1.36 MB | 100% |
+| XGBoost (`n_bits=6, depth=3, est=5`) | ~19.7 s | ~1.25 MB | 97.6% |
+
+See `docs/FINAL_REPORT_DRAFT.md`, `docs/PHASE_TRACKING.md`, and `docs/GAP_ANALYSIS.md` for full details.
