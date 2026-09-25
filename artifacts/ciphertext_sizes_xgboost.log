@@ -99,3 +99,9 @@
 2026-06-15T06:36:26.642285+00:00 model=xgboost sample=98 symptoms=7 ciphertext_bytes=1312008 pass=False
 2026-06-15T06:36:26.642287+00:00 model=xgboost sample=99 symptoms=10 ciphertext_bytes=1312008 pass=False
 2026-06-15T06:36:26.642288+00:00 model=xgboost summary n=100 min=1312008 max=1312008 median=1312008 threshold=1048576
+2026-06-18T17:54:39.144235+00:00 model=xgboost sample=0 symptoms=13 ciphertext_bytes=1312008 pass=False
+2026-06-18T17:54:39.144260+00:00 model=xgboost sample=1 symptoms=9 ciphertext_bytes=1312008 pass=False
+2026-06-18T17:54:39.144264+00:00 model=xgboost sample=2 symptoms=5 ciphertext_bytes=1312008 pass=False
+2026-06-18T17:54:39.144266+00:00 model=xgboost sample=3 symptoms=7 ciphertext_bytes=1312008 pass=False
+2026-06-18T17:54:39.144268+00:00 model=xgboost sample=4 symptoms=10 ciphertext_bytes=1312008 pass=False
+2026-06-18T17:54:39.144271+00:00 model=xgboost summary n=5 min=1312008 max=1312008 median=1312008 threshold=1048576

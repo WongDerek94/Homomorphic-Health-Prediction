@@ -1,7 +1,11 @@
 __pycache__/
+*.pyc
 .ipynb_checkpoints
 
+venv/
 venv/*
+
+deployment_files/.fhe_keys/
 deployment_files/.*
 deployment_files/client_dir/
 deployment_files/server_dir/

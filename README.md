@@ -31,7 +31,24 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Phase 2 workflow
+## One-command reproducibility
+
+Regenerate deployment bundles and the full evidence package from committed model selection artifacts:
+
+```bash
+source venv/bin/activate
+python scripts/run_all.py              # verify data → train both → evidence N=100
+python scripts/run_all.py --quick      # smoke test (N=5, fhe=simulate)
+./scripts/run_all.sh --quick           # same via shell wrapper
+
+# Optional flags:
+#   --run-model-selection   full grid search (hours; not default)
+#   --skip-train              skip FHE bundle rebuild
+#   --skip-evidence           train only
+#   --regenerate-data         rebuild CSVs from raw Training.csv/Testing.csv
+```
+
+## Phase 2 workflow (step-by-step)
 
 ```bash
 # 1. Preprocess data (optional — committed CSVs exist)

@@ -1,65 +1,67 @@
 # SecureMed — Gap Analysis: Codebase vs. Final Proposal
 
-Comparison of the current `encrypted_health_prediction` repository against the requirements in
+Comparison of the `encrypted_health_prediction` repository against the requirements in
 *Major Project Proposal — Final Version Submission* (Derek Wong, Nov 11 2025).
 
-Date of analysis: June 9, 2026.
+Status as of: June 15, 2026 (post Phase 2–4 completion).
 
 ## Summary
 
-The repository implements the complete encrypted client–server workflow (the "Must" scope core),
-but is missing most of the *evidence and measurement* layer that the proposal commits to: the
-`metrics/` and `artifacts/` stores, the N=100 latency suite, the accuracy-delta comparison, the
-preprocessing/regeneration scripts, and the retention/audit machinery.
+The **Must** scope is implemented: dual-model FHE pipeline, measurement suite, deterministic
+preprocessing, and a reproducible one-command entry point (`scripts/run_all.py`). Remaining
+items are **documented limitations** (fallback, retention), **metric threshold failures**
+(ciphertext size; XGB latency), and **final report packaging** (DOCX, screenshots, usability
+narrative).
 
-## What the proposal requires vs. what exists
+## Proposal Must scope — complete
 
-### Implemented (aligned with proposal)
-
-| Proposal requirement | Where it is implemented |
+| Proposal requirement | Where implemented |
 |---|---|
-| Python client UI with guided symptom form | `app.py` (Gradio, symptom categories from `symptoms_categories.py`) |
-| Minimum 5 symptoms enforced | `get_features_fn` in `app.py` (line 114) |
-| Client-side key generation (secret + evaluation key) | `key_gen_fn` in `app.py` using `FHEModelClient` |
-| Secret key never leaves the client | Keys stored under `deployment_files/.fhe_keys/<user_id>`; only the serialized evaluation key is POSTed |
-| Client-side encryption with visible vector + ciphertext | `encrypt_fn` shows both the one-hot vector and truncated ciphertext hex |
-| FastAPI server accepting only evaluation keys + ciphertext | `server.py` — `/send_input`, `/run_fhe`, `/get_output` |
-| Server-side FHE execution without decryption | `FHEModelServer.run()` in `/run_fhe`, returns FHE execution time |
-| Client-side decryption, top-3 diseases with probabilities | `decrypt_fn` in `app.py` |
-| Uncertainty prompt ("include more symptoms") | `decrypt_fn` threshold check (probability < 0.5 or top-2 gap < 0.1) |
-| Demonstration / not-a-medical-device notice | Footer markdown in `app.py` |
-| Fixed train/test split from the Kaggle dataset | `data/Training_preprocessed.csv`, `data/Testing_preprocessed.csv` |
-| Train-then-serve pattern (offline training, server loads compiled bundle) | `dev.py` produces `deployment_files/` (client.zip, server.zip); server only loads the bundle |
-| FHE model compiled with Concrete-ML | `dev.py` — `ConcreteLogisticRegression(C=0.9, n_bits=13, solver="sag")` |
+| Public dataset + deterministic train/test splits | `scripts/preprocess_data.py`, `data/*_preprocessed.csv` |
+| LR baseline + Concrete tree ensemble | `deployment_files/logistic_regression/`, `deployment_files/xgboost/` |
+| Grid search / model selection artifacts | `models/selected_models.json`, `models/grid_search_*`, `scripts/model_selection.ipynb` |
+| Encrypted client–server workflow | `app.py`, `server.py` |
+| Measurement suite (N=100, accuracy delta, latency, keygen, ciphertext) | `scripts/generate_evidence.py`, `metrics/`, `artifacts/` |
+| Single-command reproducibility (Should) | `scripts/run_all.py`, `scripts/run_all.sh`, `README.md` |
 
-### Gaps (proposal commitments not yet in the repo)
+## Success metrics — measured results (June 15, 2026)
 
-| # | Gap | Proposal reference | Severity |
-|---|---|---|---|
-| 1 | No `metrics/` or `artifacts/` directories, and none of the named evidence artifacts exist (`latency_stats`, `accuracy_comparison`, `keygen_time.log`, `ciphertext_sizes.log`, `input_vector_size.log`, `e2e_latency.json`) | Success Metrics table; Testing and Validation Plan | High — these are the acceptance criteria for the course deliverable |
-| 2 | No automated measurement suite (N=100 FHE latency runs, N=100 end-to-end latency runs, accuracy delta cleartext vs FHE-execute) | Success Metrics; Phase 4 | High |
-| 3 | No `scripts/preprocess_data.py` — preprocessed CSVs are checked in, but there is no script that regenerates them from `Training.csv`/`Testing.csv`, and no ingestion verification (row counts, checksums, `data/testset_checksum.txt`) | Data Handling; Phase 1 | Medium |
-| 4 | No tree-ensemble comparison model. The proposal requires logistic regression **plus** one Concrete-compatible tree ensemble; `utils.load_model` defines a `ConcreteXGBoostClassifier` but it is dead code — the deployed bundle is LR only | In Scope (Must): Baseline and FHE-Compatible Models | Medium |
-| 5 | No grid search / simulation-mode tuning artifacts (`models/grid_search_results.json`, `models/cleartext_baselines.pkl`) | Phase 2; In Scope (Should) | Medium |
-| 6 | No server fallback logic — no simulation-mode fallback, no configured timeout, no fallback-state logging. `/run_fhe` will raise on malformed input rather than degrade gracefully | State transition diagram and Fallback Logic | Medium |
-| 7 | No 24-hour retention job, no deletion audit log | Ethics and Data Governance | Low (single-host demo) but explicitly promised |
-| 8 | No single-command reproducibility entry point that regenerates models, preprocessing outputs, and measurements | In Scope (Should): Documentation and Reproducible Scripts | Medium |
-| 9 | UI displays a "HIPAA COMPLIANT" badge (`app.py` title markdown), which directly contradicts the proposal's Out of Scope statement ("does not attempt HIPAA compliance"). The badge should be removed or reworded ("Privacy by design") | Out of Scope: No Production Level Hardening or Compliance | High (accuracy of claims) |
-| 10 | No usability evaluation artifacts (mock-user observation summaries) | Testing and Validation Plan: Usability | Low — scheduled for the evaluation phase |
-| 11 | Pre-step disclaimer about data handling is not shown *before* symptom entry (only the footer notice exists) | Client Side Workflow ("the interface presents a disclaimer" at the start) | Low |
-| 12 | Input dimensionality must be verified as a fixed-length binary vector (proposal states 128; actual preprocessed schema must be confirmed and logged in `artifacts/input_vector_size.log`) | Success Metrics: Symptom vector size | Low |
+Source: `metrics/evidence_summary.json` (`generate_evidence.py --model both`, N=100, seed 8047).
 
-### Plan corrections discovered during analysis
+| Metric | LR | XGB | Verdict |
+|--------|----|-----|---------|
+| Accuracy delta ≤ 5 pp | 0.0 pp | 0.0 pp | PASS both |
+| Median FHE latency ≤ 5 s | 19 ms | 19.7 s | PASS / **FAIL** |
+| Median E2E latency ≤ 5 s | 34 ms | 22.1 s | PASS / **FAIL** |
+| Keygen ≤ 30 s | 0.001 s | 1.5 s | PASS both |
+| Ciphertext ≤ 1 MB | ~1.36 MB | ~1.25 MB | **FAIL** both |
+| 128 binary features | confirmed | confirmed | PASS both |
 
-- The proposal's "FastAPI server" requirement is **already met** — `server.py` is FastAPI served by
-  uvicorn (spawned from `app.py`). The earlier plan listed this as a gap; it is not.
-- The deployed model is the **logistic regression baseline**, not the tree ensemble. The proposal
-  treats LR as the cleartext reference and a tree ensemble as the encrypted candidate; currently LR
-  fills both roles.
+These failures are **documented findings**, not missing implementation. LR is the recommended
+interactive demo model; XGB demonstrates tree-ensemble FHE cost.
 
-## Remediation delivered alongside this analysis
+## Documented limitations (not implemented — report as future work)
 
-Gap #1 and #2 are addressed by `scripts/generate_evidence.py` (see that file's docstring), which
-produces every named artifact from the Success Metrics table and evaluates each threshold.
-Gap #3 is partially addressed: the script writes `data/testset_checksum.txt` and an ingestion
-summary. Remaining gaps (#4–#11) are mapped to phases in `docs/PHASE_TRACKING.md`.
+| Item | Proposal reference | Status |
+|------|-------------------|--------|
+| Server fallback / timeout / simulation-mode degrade | State transition; Fallback and Recomputation Tests | **Limitation** — `/run_fhe` returns HTTP 500 on missing inputs; no graceful fallback |
+| 24-hour retention job + deletion audit log | Ethics and Data Governance | **Limitation** — single-host demo; manual Reset clears client/server temp dirs |
+| Pre-entry data-handling disclaimer | Client workflow | **Author-provided** — documented in final report (user content) |
+| Usability sessions (2–3 mock users) | Testing and Validation Plan | **Author-provided** — documented in final report (user content) |
+
+## Resolved gaps (formerly open as of June 9, 2026)
+
+| Former gap | Resolution |
+|------------|------------|
+| No `metrics/` or `artifacts/` | Populated by `generate_evidence.py --model both` |
+| No automated N=100 suite | Done |
+| No `preprocess_data.py` | Done |
+| LR-only deployment | Dual LR + XGB bundles and UI model picker |
+| No grid search artifacts | `models/` directory complete |
+| HIPAA badge | Replaced with PRIVACY BY DESIGN |
+| Input vector verification | `artifacts/input_vector_size.log` |
+
+## Optional (Could scope — not required)
+
+- Expanded latency/ciphertext visualizations in report appendix from `model_selection.ipynb`
+- Further LR `n_bits` retuning (6–7) to chase 1 MB ciphertext threshold

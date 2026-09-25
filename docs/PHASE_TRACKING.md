@@ -47,7 +47,7 @@ Status as of: June 15, 2026.
 
 ## Phase 4 — Encrypted Execution Experiments, Evaluation Metrics, Final Evidence (Weeks 10–12)
 
-**Status: dual-model evidence complete; report updated.**
+**Status: complete pending final report submission.**
 
 `scripts/generate_evidence.py --model both` produced a full N=100 evidence package on June 15, 2026
 (see `metrics/evidence_summary.json`):
@@ -81,9 +81,12 @@ Status as of: June 15, 2026.
 
 ## Remaining milestones (priority order)
 
-1. **Ciphertext size** — explore lower `n_bits` (6–7) for LR; document trade-offs in final report.
-2. **Server fallback logic** — timeout with simulation-mode fallback and state logging.
-3. **Pre-entry disclaimer** — data-handling notice before symptom entry.
-4. **Retention job** — 24-hour deletion of server-side artifacts with audit log.
-5. **Usability sessions** — 2–3 mock users; store summary in `artifacts/`.
-6. **Final report submission** — convert `docs/FINAL_REPORT_DRAFT.md` to DOCX; insert screenshots; fill `[TBD]` placeholders.
+1. **Final report submission** — `docs/FINAL_REPORT.docx` from draft; insert screenshots; fill author disclaimer and usability sections in §2.7.
+2. **Demo rehearsal** — LR end-to-end flow in `app.py` (see `docs/DEMO_CHECKLIST.md`).
+3. **Optional:** LR `n_bits` retuning (6–7) to chase 1 MB ciphertext threshold.
+
+## Documented limitations (no further code before submission)
+
+- Server fallback / timeout / simulation-mode degrade
+- 24-hour retention job and audit log
+- Ciphertext ≤ 1 MB (both models); XGB FHE/E2E latency ≤ 5 s

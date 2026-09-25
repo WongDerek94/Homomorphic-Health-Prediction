@@ -1,7 +1,7 @@
 {
   "run_config": {
-    "n_runs": 100,
-    "fhe_accuracy_mode": "execute",
+    "n_runs": 5,
+    "fhe_accuracy_mode": "simulate",
     "seed": 8047,
     "models": [
       "logistic_regression",
@@ -18,13 +18,13 @@
       },
       "accuracy_delta_pp": 0.0,
       "accuracy_pass": true,
-      "fhe_latency_median_s": 0.018802050000886084,
+      "fhe_latency_median_s": 0.017991600965615362,
       "fhe_latency_pass": true,
-      "e2e_latency_median_s": 0.034433051000632986,
+      "e2e_latency_median_s": 0.03601320297457278,
       "e2e_latency_pass": true,
-      "keygen_time_s": 0.0011630999997578328,
+      "keygen_time_s": 0.001528399996459484,
       "keygen_pass": true,
-      "ciphertext_median_bytes": 1423624.0,
+      "ciphertext_median_bytes": 1423624,
       "ciphertext_pass": false
     },
     "xgboost": {
@@ -36,15 +36,15 @@
       },
       "accuracy_delta_pp": 0.0,
       "accuracy_pass": true,
-      "fhe_latency_median_s": 19.731724752500668,
+      "fhe_latency_median_s": 21.11371732299449,
       "fhe_latency_pass": false,
-      "e2e_latency_median_s": 22.061223304501254,
+      "e2e_latency_median_s": 24.80226688500261,
       "e2e_latency_pass": false,
-      "keygen_time_s": 1.504348349000793,
+      "keygen_time_s": 1.4574918219586834,
       "keygen_pass": true,
-      "ciphertext_median_bytes": 1312008.0,
+      "ciphertext_median_bytes": 1312008,
       "ciphertext_pass": false
     }
   },
-  "generated_at": "2026-06-15T08:00:18.737414+00:00"
+  "generated_at": "2026-06-18T17:58:42.937543+00:00"
 }

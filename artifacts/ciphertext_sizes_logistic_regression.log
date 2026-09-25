@@ -99,3 +99,9 @@
 2026-06-15T06:36:05.821565+00:00 model=logistic_regression sample=98 symptoms=12 ciphertext_bytes=1423624 pass=False
 2026-06-15T06:36:05.821566+00:00 model=logistic_regression sample=99 symptoms=9 ciphertext_bytes=1423624 pass=False
 2026-06-15T06:36:05.821568+00:00 model=logistic_regression summary n=100 min=1423624 max=1423624 median=1423624 threshold=1048576
+2026-06-18T17:54:26.676403+00:00 model=logistic_regression sample=0 symptoms=16 ciphertext_bytes=1423624 pass=False
+2026-06-18T17:54:26.676418+00:00 model=logistic_regression sample=1 symptoms=17 ciphertext_bytes=1423624 pass=False
+2026-06-18T17:54:26.676421+00:00 model=logistic_regression sample=2 symptoms=15 ciphertext_bytes=1423624 pass=False
+2026-06-18T17:54:26.676424+00:00 model=logistic_regression sample=3 symptoms=11 ciphertext_bytes=1423624 pass=False
+2026-06-18T17:54:26.676426+00:00 model=logistic_regression sample=4 symptoms=17 ciphertext_bytes=1423624 pass=False
+2026-06-18T17:54:26.676428+00:00 model=logistic_regression summary n=5 min=1423624 max=1423624 median=1423624 threshold=1048576
